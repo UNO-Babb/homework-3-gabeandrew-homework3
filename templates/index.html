@@ -3,59 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexagon Tile Game</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-        }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(10, 60px);
-            grid-template-rows: repeat(10, 52px);
-            gap: 2px;
-        }
-        .hex {
-            width: 60px;
-            height: 52px;
-            background-color: lightgray;
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            transition: background-color 0.2s;
-        }
-    </style>
+    <title>Balloon Bounce Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="500" height="500"></canvas>
+        <div id="info">
+            <div id="score">Score: 0</div>
+            <div id="high-score">High Score: 0</div>
+            <button id="pause-btn">Pause</button>
+            <button id="restart-btn">Restart</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-<div id="board">
-    <!-- Hexagonal tiles will be added here on clicks -->
-</div>
+        let platformWidth = 90;
+        let platformHeight = 15;
+        let balloonRadius = 30;
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-    $(document).ready(function() {
-        // Create an empty board of hex tiles
-        for (let i = 0; i < 100; i++) {
-            const hexTile = $('<div class="hex"></div>');
-            hexTile.data("clicked", false);  // Track if a tile has been clicked
-            $('#board').append(hexTile);
+        // Initial balloon position and movement (angled movement)
+        let balloon = { x: 250, y: 50, dx: 2, dy: 3 };  // Adjust these values for angled movement
+        let platform = { x: 200, y: 450, dx: 0 };  // Player's platform
+        let spikes = Array.from({ length: 10 }, (_, i) => ({ x: i * 50, y: 480 }));
+
+        let gameRunning = true;
+        let score = 0;
+        let highScore = 0;
+
+        // Function to draw the game
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);  // Clear the canvas
+
+            // Draw the balloon
+            ctx.beginPath();
+            ctx.arc(balloon.x, balloon.y, balloonRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "red";
+            ctx.fill();
+            ctx.closePath();
+
+            // Draw the platform
+            ctx.beginPath();
+            ctx.rect(platform.x, platform.y, platformWidth, platformHeight);  // Platform rectangle
+            ctx.fillStyle = "black";
+            ctx.fill();
+            ctx.closePath();
+
+            // Draw the spikes
+            ctx.fillStyle = "gray";
+            spikes.forEach(spike => {
+                ctx.beginPath();
+                ctx.moveTo(spike.x, spike.y);
+                ctx.lineTo(spike.x + 25, spike.y - 15);
+                ctx.lineTo(spike.x + 50, spike.y);
+                ctx.fill();
+                ctx.closePath();
+            });
+
+            // Update the balloon position
+            balloon.x += balloon.dx;
+            balloon.y += balloon.dy;
+
+            // Ball bounce off walls (left and right)
+            if (balloon.x - balloonRadius <= 0 || balloon.x + balloonRadius >= canvas.width) {
+                balloon.dx = -balloon.dx;  // Reverse horizontal direction
+            }
+
+            // Ball bounce off the ceiling
+            if (balloon.y - balloonRadius <= 0) {
+                balloon.dy = -balloon.dy;  // Reverse vertical direction
+            }
+
+            // Check for collision with the platform
+            if (balloon.y + balloonRadius > platform.y &&
+                balloon.x > platform.x && balloon.x < platform.x + platformWidth) {
+                balloon.dy = -balloon.dy;  // Reverse vertical direction
+                score++;
+                if (score > highScore) highScore = score;
+            }
+
+            // Check for collision with spikes
+            if (balloon.y + balloonRadius >= 480) {
+                gameRunning = false;
+                alert("Game Over! Final Score: " + score);
+                saveGameState();
+            }
+
+            // Update the score and high score
+            document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('high-score').textContent = `High Score: ${highScore}`;
         }
 
-        // Add color to hex tiles on click
-        $('#board').on('click', '.hex', function() {
-            if (!$(this).data("clicked")) {  // Only allow one click per tile
-                $.getJSON('/add_tile', function(data) {
-                    $(this).css('background-color', data.color);
-                    $(this).data("clicked", true);  // Mark as clicked
-                }.bind(this));
+        // Function to save the game state
+        function saveGameState() {
+            const state = {
+                high_score: highScore,
+                current_score: score,
+                balloon_position: { x: balloon.x, y: balloon.y },
+                platform_position: { x: platform.x, y: platform.y },
+                game_running: gameRunning
+            };
+            fetch('/save_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            });
+        }
+
+        // Function to handle platform movement
+        function movePlatform(e) {
+            if (e.key === "ArrowLeft" && platform.x > 0) {
+                platform.x -= 10;  // Move left
+            } else if (e.key === "ArrowRight" && platform.x < canvas.width - platformWidth) {
+                platform.x += 10;  // Move right
+            }
+        }
+
+        // Start/Pause functionality
+        document.getElementById('pause-btn').addEventListener('click', () => {
+            gameRunning = !gameRunning;
+            if (gameRunning) {
+                resumeGame();
+            } else {
+                pauseGame();
             }
         });
-    });
-</script>
 
+        function pauseGame() {
+            fetch('/pause_game', { method: 'POST' });
+        }
+
+        function resumeGame() {
+            fetch('/resume_game', { method: 'POST' });
+        }
+
+        // Restart the game by resetting the state
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            // Reset everything to the initial state
+            balloon = { x: 250, y: 50, dx: 2, dy: 3 };  // Start with angled movement
+            platform = { x: 200, y: 450, dx: 0 };
+            score = 0;
+            gameRunning = true;
+            // Reset the state on the server as well
+            fetch('/save_game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    high_score: highScore,
+                    current_score: score,
+                    balloon_position: balloon,
+                    platform_position: platform,
+                    game_running: gameRunning
+                })
+            });
+            document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('high-score').textContent = `High Score: ${highScore}`;
+        });
+
+        // Load the initial game state
+        fetch('/game_state')
+            .then(response => response.json())
+            .then(state => {
+                highScore = state.high_score;
+                score = state.current_score;
+                balloon.x = state.balloon_position.x;
+                balloon.y = state.balloon_position.y;
+                platform.x = state.platform_position.x;
+                platform.y = state.platform_position.y;
+                gameRunning = state.game_running;
+            });
+
+        // Game loop
+        function gameLoop() {
+            if (gameRunning) {
+                drawGame();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Event listeners for movement
+        window.addEventListener('keydown', movePlatform);
+
+        // Start the game loop
+        gameLoop();
+    </script>
 </body>
 </html>

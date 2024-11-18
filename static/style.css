@@ -1,0 +1,22 @@
+#info {
+    color: blue;
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    width: 500px;
+    font-size: 16px;
+    gap: 10px;
+}
+
+button {
+    background-color: gray;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background-color: lightgray;
+}
